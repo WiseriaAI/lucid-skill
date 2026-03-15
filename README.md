@@ -4,6 +4,8 @@
 
 Connect your Excel files, CSVs, and MySQL databases. Understand business semantics. Query with natural language.
 
+[![lucid-mcp MCP server](https://glama.ai/mcp/servers/wiseriai/lucid-mcp/badges/card.svg)](https://glama.ai/mcp/servers/wiseriai/lucid-mcp)
+
 ```jsonc
 // Claude Desktop / Cursor config
 {
