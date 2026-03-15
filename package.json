@@ -24,7 +24,8 @@
     "better-sqlite3": "^11.9.1",
     "duckdb": "1.4.0",
     "js-yaml": "^4.1.0",
-    "mysql2": "^3.14.1"
+    "mysql2": "^3.14.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
