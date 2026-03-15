@@ -31,26 +31,47 @@ export function handleSearchTables(
   return JSON.stringify(
     {
       message: `Found ${results.length} table(s) matching "${query}"`,
-      results: results.map((r) => ({
-        sourceId: r.sourceId,
-        tableName: r.tableName,
-        relevanceRank: r.rank,
-        description: r.semantic?.description,
-        businessDomain: r.semantic?.businessDomain,
-        tags: r.semantic?.tags,
-        columns: r.semantic?.columns?.map((c) => ({
-          name: c.name,
-          semantic: c.semantic,
-          role: c.role,
-          unit: c.unit,
-        })),
-        relations: r.semantic?.relations?.map((rel) => ({
+      results: results.map((r) => {
+        const relations = r.semantic?.relations?.map((rel) => ({
           targetTable: rel.targetTable,
           joinCondition: rel.joinCondition,
           relationType: rel.relationType,
-        })),
-        metrics: r.semantic?.metrics,
-      })),
+        }));
+
+        const suggestedJoins = relations?.length
+          ? relations.map((rel) => `JOIN ${rel.targetTable} ON ${rel.joinCondition}`)
+          : [];
+
+        const suggestedMetricSqls = r.semantic?.metrics?.length
+          ? r.semantic.metrics.map((m) => {
+              const groupByClause = m.groupBy ? ` GROUP BY ${m.groupBy}` : "";
+              const selectCols = m.groupBy ? `${m.groupBy}, ` : "";
+              return {
+                name: m.name,
+                sql: `SELECT ${selectCols}${m.expression} AS ${m.name} FROM ${r.tableName}${groupByClause}`,
+              };
+            })
+          : [];
+
+        return {
+          sourceId: r.sourceId,
+          tableName: r.tableName,
+          relevanceRank: r.rank,
+          description: r.semantic?.description,
+          businessDomain: r.semantic?.businessDomain,
+          tags: r.semantic?.tags,
+          columns: r.semantic?.columns?.map((c) => ({
+            name: c.name,
+            semantic: c.semantic,
+            role: c.role,
+            unit: c.unit,
+          })),
+          relations,
+          suggestedJoins,
+          metrics: r.semantic?.metrics,
+          suggestedMetricSqls,
+        };
+      }),
     },
     null,
     2,

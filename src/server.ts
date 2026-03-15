@@ -73,6 +73,14 @@ export async function createServer(): Promise<McpServer> {
     async (params) => {
       try {
         const result = await handleConnectSource(params, catalog, engine, router);
+
+        // Determine nextStep hint based on semantic_status of tables
+        const tableMetas = catalog.getTables(result.sourceId);
+        const allNotInitialized = tableMetas.length > 0 && tableMetas.every((t) => t.semantic_status === "not_initialized");
+        const nextStep = allNotInitialized
+          ? "Semantic layer not initialized. Call init_semantic() to infer business semantics, then update_semantic() to save them. After that, use search_tables() for natural language queries."
+          : "Semantic layer ready. Use get_overview() to see current status, or search_tables() to find relevant tables.";
+
         return {
           content: [{
             type: "text" as const,
@@ -80,6 +88,7 @@ export async function createServer(): Promise<McpServer> {
               success: true,
               sourceId: result.sourceId,
               message: `Connected successfully. Found ${result.tables.length} table(s): ${result.tables.map((t) => t.name).join(", ")}`,
+              nextStep,
               tables: result.tables.map((t) => ({
                 name: t.name,
                 rowCount: t.rowCount,
