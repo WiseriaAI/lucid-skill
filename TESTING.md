@@ -288,24 +288,31 @@ npm run test:scenario 3  # SQL 安全检查
 
 ## 测试结果记录
 
-### Test Run #1 — 2026-03-15 12:47 GMT+8
+### Test Run #1 — 2026-03-15 13:09 GMT+8
 
-| Scenario | Status | 耗时 | 备注 |
-|----------|--------|------|------|
-| 1.1 CSV 连接 | — | — | pending |
-| 1.2 列表 | — | — | pending |
-| 1.3 描述表 | — | — | pending |
-| 1.4 基础查询 | — | — | pending |
-| 1.5 聚合查询 | — | — | pending |
-| 1.6 Profiling | — | — | pending |
-| 2.1 init_semantic | — | — | pending |
-| 2.2 update_semantic | — | — | pending |
-| 2.3 search_tables | — | — | pending |
-| 3.1 禁止 INSERT | — | — | pending |
-| 3.2 禁止 DELETE | — | — | pending |
-| 3.3 禁止 DROP | — | — | pending |
-| 3.4 允许 SELECT | — | — | pending |
-| 3.5 允许 CTE | — | — | pending |
+| Scenario | Status | 备注 |
+|----------|--------|------|
+| 1.1 CSV 连接 | ✅ 通过 | sourceId=csv:orders.csv，1张表，15列，12行 |
+| 1.2 列表 | ✅ 通过 | 返回表名、行数、列数、semantic_status |
+| 1.3 描述表 | ✅ 通过 | 返回15列完整信息 + sampleValues |
+| 1.4 基础查询 | ✅ 通过 | `SELECT COUNT(*) → 12` |
+| 1.5 聚合查询 | ✅ 通过 | Technology: 42995, Furniture: 20080, Office Supplies: 584 |
+| 1.6 Profiling | ✅ 通过 | 15列全部 SUMMARIZE，含 min/max/approxUnique/nullPercentage |
+| 2.1 init_semantic | ⏳ Sprint 2 | 目前返回提示信息 |
+| 2.2 update_semantic | ⏳ Sprint 2 | 目前返回提示信息 |
+| 2.3 search_tables | ⏳ Sprint 2 | 目前返回提示信息 |
+| 3.1 禁止 INSERT | ✅ 通过 | "SQL safety check failed: Only SELECT statements are allowed. Got: INSERT" |
+| 3.2 禁止 DELETE | ✅ 通过 | "SQL safety check failed: Only SELECT statements are allowed. Got: DELETE" |
+| 3.3 禁止 DROP | ✅ 通过 | "SQL safety check failed: Only SELECT statements are allowed. Got: DROP" |
+| 3.4 允许 SELECT | ✅ 通过 | 正常返回数据 |
+| 3.5 允许 CTE | ✅ 通过 | WITH 语句正常执行 |
+
+**总结：11/11 测试通过（语义层 3 项待 Sprint 2 实现）**
+
+**修复的 Bug（第一轮测试发现）：**
+1. BigInt 序列化错误 — DuckDB 返回 BigInt 类型，JSON.stringify 失败 → 增加自定义 replacer
+2. Tool 注册不完整 — describe_table / profile_data 未注册到 MCP Server → 补全注册
+3. CSV 表未注册到 DuckDB — connect_source 时未调用 registerToDuckDB → 传入 engine 并调用
 
 ---
 
