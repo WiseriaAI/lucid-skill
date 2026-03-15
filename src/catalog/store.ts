@@ -103,6 +103,10 @@ export class CatalogStore {
     comment: string | null,
     sampleValues: unknown[],
   ): void {
+    // Serialize sample values safely: convert BigInt → string to avoid JSON.stringify failure
+    const safeSamples = JSON.stringify(sampleValues, (_key, val) =>
+      typeof val === "bigint" ? String(val) : val,
+    );
     this.db
       .prepare(
         `INSERT INTO columns_meta (source_id, table_name, column_name, dtype, nullable, comment, sample_values)
@@ -117,11 +121,11 @@ export class CatalogStore {
         dtype,
         nullable ? 1 : 0,
         comment,
-        JSON.stringify(sampleValues),
+        safeSamples,
         dtype,
         nullable ? 1 : 0,
         comment,
-        JSON.stringify(sampleValues),
+        safeSamples,
       );
   }
 

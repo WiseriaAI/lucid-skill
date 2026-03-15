@@ -14,11 +14,13 @@ export class ExcelConnector implements Connector {
   private config: ExcelConfig | null = null;
   private db: duckdb.Database | null = null;
   private tables: string[] = [];
+  private filePath = "";
+  private tableSheets = new Map<string, string | null>();
 
   async connect(config: Record<string, unknown>): Promise<void> {
     this.config = config as unknown as ExcelConfig;
-    const filePath = path.resolve(this.config.path);
-    const fileName = path.basename(filePath, path.extname(filePath));
+    this.filePath = path.resolve(this.config.path);
+    const fileName = path.basename(this.filePath, path.extname(this.filePath));
     this.sourceId = `excel:${fileName}`;
 
     this.db = new duckdb.Database(":memory:");
@@ -29,17 +31,19 @@ export class ExcelConnector implements Connector {
       for (const sheet of sheets) {
         const tableName = `${fileName}_${sheet}`.replace(/[^a-zA-Z0-9_\u4e00-\u9fff]/g, "_");
         await this.run(
-          `CREATE TABLE "${tableName}" AS SELECT * FROM read_xlsx('${filePath}', sheet='${sheet}')`,
+          `CREATE TABLE "${tableName}" AS SELECT * FROM read_xlsx('${this.filePath}', sheet='${sheet}')`,
         );
         this.tables.push(tableName);
+        this.tableSheets.set(tableName, sheet);
       }
     } else {
       // Load all sheets - try default first
       const tableName = fileName.replace(/[^a-zA-Z0-9_\u4e00-\u9fff]/g, "_");
       await this.run(
-        `CREATE TABLE "${tableName}" AS SELECT * FROM read_xlsx('${filePath}')`,
+        `CREATE TABLE "${tableName}" AS SELECT * FROM read_xlsx('${this.filePath}')`,
       );
       this.tables.push(tableName);
+      this.tableSheets.set(tableName, null);
     }
   }
 
@@ -50,7 +54,7 @@ export class ExcelConnector implements Connector {
   async getTableInfo(table: string): Promise<TableInfo> {
     const columns = await this.getColumns(table);
     const countResult = await this.all(`SELECT COUNT(*) as cnt FROM "${table}"`);
-    const rowCount = (countResult[0] as { cnt: number }).cnt;
+    const rowCount = Number((countResult[0] as { cnt: number | bigint }).cnt);
 
     return {
       name: table,
@@ -67,9 +71,20 @@ export class ExcelConnector implements Connector {
   }
 
   async registerToDuckDB(targetDb: unknown): Promise<string[]> {
-    // For Excel, data is already in DuckDB. We export and re-import.
-    // In practice, the query engine will use this connector's internal DuckDB.
-    // For cross-source queries, data will be exported.
+    const db = targetDb as duckdb.Database;
+    const runOnTarget = (sql: string) =>
+      new Promise<void>((resolve, reject) => {
+        db.run(sql, (err: Error | null) => (err ? reject(err) : resolve()));
+      });
+
+    await runOnTarget("INSTALL spatial; LOAD spatial;");
+
+    for (const [tableName, sheet] of this.tableSheets) {
+      const sheetClause = sheet ? `, sheet='${sheet}'` : "";
+      await runOnTarget(
+        `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_xlsx('${this.filePath}'${sheetClause})`,
+      );
+    }
     return this.tables;
   }
 

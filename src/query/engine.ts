@@ -45,7 +45,7 @@ export class QueryEngine {
         const countResult = await this.all(
           `SELECT COUNT(*) as cnt FROM (${sql}) AS _count_subquery`,
         );
-        totalCount = (countResult[0] as { cnt: number }).cnt;
+        totalCount = Number((countResult[0] as { cnt: number | bigint }).cnt);
         truncated = totalCount > limit;
       } catch {
         // If count query fails, just use what we have

@@ -4,6 +4,7 @@ import { ExcelConnector } from "../connectors/excel.js";
 import { CsvConnector } from "../connectors/csv.js";
 import { MySQLConnector } from "../connectors/mysql.js";
 import { CatalogStore } from "../catalog/store.js";
+import { QueryEngine } from "../query/engine.js";
 import { collectSchema } from "../catalog/schema.js";
 
 /**
@@ -25,6 +26,7 @@ export function getConnector(sourceId: string): Connector | undefined {
 export async function handleConnectSource(
   params: Record<string, unknown>,
   catalog: CatalogStore,
+  engine?: QueryEngine,
 ): Promise<{ sourceId: string; tables: TableInfo[] }> {
   const config = params as unknown as SourceConfig;
 
@@ -53,6 +55,11 @@ export async function handleConnectSource(
 
   // Collect schema
   const tables = await collectSchema(connector, catalog);
+
+  // Register tables into the shared query engine DuckDB
+  if (engine) {
+    await connector.registerToDuckDB(engine.getDatabase());
+  }
 
   return { sourceId, tables };
 }

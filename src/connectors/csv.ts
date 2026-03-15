@@ -14,6 +14,7 @@ export class CsvConnector implements Connector {
   private config: CsvConfig | null = null;
   private db: duckdb.Database | null = null;
   private tables: string[] = [];
+  private tableFiles = new Map<string, string>();
 
   async connect(config: Record<string, unknown>): Promise<void> {
     this.config = config as unknown as CsvConfig;
@@ -32,6 +33,7 @@ export class CsvConnector implements Connector {
           `CREATE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${filePath}')`,
         );
         this.tables.push(tableName);
+        this.tableFiles.set(tableName, filePath);
       }
     } else {
       const tableName = path
@@ -41,6 +43,7 @@ export class CsvConnector implements Connector {
         `CREATE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${csvPath}')`,
       );
       this.tables.push(tableName);
+      this.tableFiles.set(tableName, csvPath);
     }
   }
 
@@ -51,7 +54,7 @@ export class CsvConnector implements Connector {
   async getTableInfo(table: string): Promise<TableInfo> {
     const columns = await this.getColumns(table);
     const countResult = await this.all(`SELECT COUNT(*) as cnt FROM "${table}"`);
-    const rowCount = (countResult[0] as { cnt: number }).cnt;
+    const rowCount = Number((countResult[0] as { cnt: number | bigint }).cnt);
 
     return {
       name: table,
@@ -67,7 +70,18 @@ export class CsvConnector implements Connector {
     >;
   }
 
-  async registerToDuckDB(_targetDb: unknown): Promise<string[]> {
+  async registerToDuckDB(targetDb: unknown): Promise<string[]> {
+    const db = targetDb as duckdb.Database;
+    const runOnTarget = (sql: string) =>
+      new Promise<void>((resolve, reject) => {
+        db.run(sql, (err: Error | null) => (err ? reject(err) : resolve()));
+      });
+
+    for (const [tableName, filePath] of this.tableFiles) {
+      await runOnTarget(
+        `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${filePath}')`,
+      );
+    }
     return this.tables;
   }
 
