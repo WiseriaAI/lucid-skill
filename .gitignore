@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.db
+lucid-catalog.db
+.env
+.DS_Store
+*.tgz
+coverage/

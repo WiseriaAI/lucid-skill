@@ -1,0 +1,59 @@
+{
+  "name": "lucid-mcp",
+  "version": "0.1.0",
+  "description": "AI-native data analysis agent as MCP Server. Connect Excel/CSV/MySQL, understand business semantics, query with natural language.",
+  "type": "module",
+  "bin": {
+    "lucid-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.9.1",
+    "duckdb": "1.4.0",
+    "js-yaml": "^4.1.0",
+    "mysql2": "^3.14.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.17.0",
+    "eslint": "^9.20.0",
+    "prettier": "^3.5.3",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicekate/lucid-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "data-analysis",
+    "duckdb",
+    "excel",
+    "csv",
+    "mysql",
+    "ai",
+    "natural-language",
+    "business-intelligence"
+  ]
+}
