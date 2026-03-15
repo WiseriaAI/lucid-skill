@@ -10,22 +10,51 @@ import { handleDescribeTable } from "./tools/describe.js";
 import { handleProfileData } from "./tools/profile.js";
 import { handleInitSemantic, handleUpdateSemantic } from "./tools/semantic.js";
 import { handleSearchTables } from "./tools/search.js";
+import { handleGetOverview } from "./tools/overview.js";
+import { autoRestoreConnections } from "./startup.js";
 import { getConfig } from "./config.js";
 
 /**
  * Create and configure the Lucid MCP Server.
+ * Returns after auto-restoring previous connections.
  */
-export function createServer(): McpServer {
+export async function createServer(): Promise<McpServer> {
   const config = getConfig();
   const catalog = new CatalogStore();
   const engine = new QueryEngine();
   const router = new QueryRouter(engine);
   const semanticIndex = new SemanticIndex();
 
+  // Auto-restore previously connected sources on startup
+  const { restored, failed } = await autoRestoreConnections(catalog, engine, router, semanticIndex);
+  if (restored > 0 || failed.length > 0) {
+    process.stderr.write(
+      `[lucid-mcp] startup: restored ${restored} source(s)${failed.length ? `, failed: ${failed.join("; ")}` : ""}\n`,
+    );
+  }
+
   const server = new McpServer({
     name: config.server.name,
     version: config.server.version,
   });
+
+  // ── Tool: get_overview ───────────────────────────────────────────────────
+  server.tool(
+    "get_overview",
+    "Get an overview of all connected data sources, tables, and semantic layer status.",
+    {},
+    async () => {
+      try {
+        const result = handleGetOverview(catalog, semanticIndex);
+        return { content: [{ type: "text" as const, text: result }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Error getting overview: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
 
   // ── Tool: connect_source ──────────────────────────────────────────────────
   server.tool(

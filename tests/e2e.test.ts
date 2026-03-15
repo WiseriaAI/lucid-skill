@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "child_process";
 import * as readline from "readline";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 
 let server: ChildProcess;
 let messageId = 1;
@@ -58,7 +60,18 @@ async function sendMessage(request: JsonRpcRequest): Promise<JsonRpcResponse> {
 }
 
 describe("Lucid MCP — Sprint 1 E2E Tests", () => {
-  beforeAll((done) => {
+  beforeAll(async () => {
+    // Clean up old catalog DB and semantic store to avoid state pollution
+    const lucidDir = path.join(os.homedir(), ".lucid-mcp");
+    const catalogPath = path.join(lucidDir, "lucid-catalog.db");
+    const semanticStorePath = path.join(lucidDir, "semantic_store");
+    if (fs.existsSync(catalogPath)) {
+      fs.unlinkSync(catalogPath);
+    }
+    if (fs.existsSync(semanticStorePath)) {
+      fs.rmSync(semanticStorePath, { recursive: true });
+    }
+
     server = spawn("node", [path.join(process.cwd(), "dist/index.js")], {
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -68,11 +81,35 @@ describe("Lucid MCP — Sprint 1 E2E Tests", () => {
     });
 
     // Wait for server to start
-    setTimeout(() => done(), 1000);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 
   afterAll(() => {
     server.kill();
+  });
+
+  describe("Scenario 0: get_overview", () => {
+    it("0.1 启动时 get_overview 返回空状态", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_overview",
+          arguments: {},
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data).toHaveProperty("sources");
+      expect(data).toHaveProperty("summary");
+      expect(data.summary.totalSources).toBe(0);
+      console.log("✅ get_overview (empty):", data.summary);
+    });
   });
 
   describe("Scenario 1: CSV 连接 + 基础查询", () => {
@@ -93,6 +130,27 @@ describe("Lucid MCP — Sprint 1 E2E Tests", () => {
       expect(response.result).toBeDefined();
       expect(response.error).toBeUndefined();
       console.log("✅ CSV 连接成功:", response.result);
+    });
+
+    it("1.1b get_overview 连接后返回数据源", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_overview",
+          arguments: {},
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.sources.length).toBeGreaterThan(0);
+      expect(data.summary.totalSources).toBeGreaterThan(0);
+      expect(data.summary.activeSources).toBeGreaterThan(0);
+      console.log("✅ get_overview (after connect):", data.summary);
     });
 
     it("1.2 列出所有表", async () => {
