@@ -57,6 +57,16 @@ export class CatalogStore {
         profiled_at   TEXT,
         PRIMARY KEY (source_id, table_name, column_name)
       );
+
+      CREATE TABLE IF NOT EXISTS embeddings (
+        source_id    TEXT NOT NULL,
+        table_name   TEXT NOT NULL,
+        vector       BLOB NOT NULL,
+        model_id     TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        updated_at   TEXT,
+        PRIMARY KEY (source_id, table_name)
+      );
     `);
   }
 
@@ -256,6 +266,77 @@ export class CatalogStore {
       min_value: string | null;
       max_value: string | null;
     }>;
+  }
+
+  saveEmbedding(
+    sourceId: string,
+    tableName: string,
+    vector: Float32Array,
+    modelId: string,
+    contentHash: string,
+  ): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO embeddings (source_id, table_name, vector, model_id, content_hash, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(source_id, table_name) DO UPDATE SET
+           vector=?, model_id=?, content_hash=?, updated_at=?`,
+      )
+      .run(
+        sourceId,
+        tableName,
+        Buffer.from(vector.buffer),
+        modelId,
+        contentHash,
+        now,
+        Buffer.from(vector.buffer),
+        modelId,
+        contentHash,
+        now,
+      );
+  }
+
+  getEmbedding(
+    sourceId: string,
+    tableName: string,
+  ): { vector: Float32Array; modelId: string; contentHash: string } | null {
+    const row = this.db
+      .prepare("SELECT vector, model_id, content_hash FROM embeddings WHERE source_id = ? AND table_name = ?")
+      .get(sourceId, tableName) as { vector: Buffer; model_id: string; content_hash: string } | undefined;
+
+    if (!row) return null;
+    return {
+      vector: new Float32Array(row.vector.buffer, row.vector.byteOffset, row.vector.byteLength / 4),
+      modelId: row.model_id,
+      contentHash: row.content_hash,
+    };
+  }
+
+  getAllEmbeddings(): Array<{
+    sourceId: string;
+    tableName: string;
+    vector: Float32Array;
+    modelId: string;
+    contentHash: string;
+  }> {
+    const rows = this.db
+      .prepare("SELECT source_id, table_name, vector, model_id, content_hash FROM embeddings")
+      .all() as Array<{
+      source_id: string;
+      table_name: string;
+      vector: Buffer;
+      model_id: string;
+      content_hash: string;
+    }>;
+
+    return rows.map((r) => ({
+      sourceId: r.source_id,
+      tableName: r.table_name,
+      vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.vector.byteLength / 4),
+      modelId: r.model_id,
+      contentHash: r.content_hash,
+    }));
   }
 
   close(): void {

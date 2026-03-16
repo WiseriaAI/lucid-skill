@@ -7,11 +7,13 @@ import type { CatalogStore } from "./catalog/store.js";
 import type { QueryEngine } from "./query/engine.js";
 import type { QueryRouter } from "./query/router.js";
 import type { SemanticIndex } from "./semantic/index.js";
+import type { Embedder } from "./semantic/embedder.js";
 import { ExcelConnector } from "./connectors/excel.js";
 import { CsvConnector } from "./connectors/csv.js";
 import { MySQLConnector } from "./connectors/mysql.js";
 import { collectSchema } from "./catalog/schema.js";
 import { listAllSemantics } from "./semantic/layer.js";
+import { loadEmbeddingCache } from "./semantic/hybridSearch.js";
 import { getConnectors } from "./tools/connect.js";
 
 /**
@@ -23,6 +25,7 @@ export async function autoRestoreConnections(
   engine: QueryEngine,
   router: QueryRouter,
   semanticIndex: SemanticIndex,
+  embedder?: Embedder | null,
 ): Promise<{ restored: number; failed: string[] }> {
   const sources = catalog.getSources();
   let restored = 0;
@@ -75,6 +78,18 @@ export async function autoRestoreConnections(
 
   // Rebuild semantic index from persisted YAML files
   rebuildSemanticIndex(semanticIndex);
+
+  // Load embedding cache and ensure embeddings if enabled
+  if (embedder) {
+    loadEmbeddingCache(catalog);
+    // Fire-and-forget: generate missing embeddings once model is ready
+    embedder
+      .init()
+      .then(() => semanticIndex.ensureEmbeddings(catalog, embedder))
+      .catch(() => {
+        // Non-fatal
+      });
+  }
 
   return { restored, failed };
 }

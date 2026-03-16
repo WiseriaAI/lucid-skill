@@ -142,6 +142,11 @@ export interface LucidConfig {
     dbPath: string;
     autoProfile: boolean;
   };
+  embedding: {
+    enabled: boolean;
+    model: string;
+    cacheDir: string;
+  };
   logging: {
     level: "debug" | "info" | "warn" | "error";
   };

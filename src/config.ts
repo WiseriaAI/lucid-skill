@@ -35,6 +35,11 @@ const DEFAULT_CONFIG: LucidConfig = {
     dbPath: path.join(dataDir, "lucid-catalog.db"),
     autoProfile: true,
   },
+  embedding: {
+    enabled: process.env.LUCID_EMBEDDING_ENABLED === "true",
+    model: "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+    cacheDir: path.join(os.homedir(), ".lucid-mcp", "models"),
+  },
   logging: {
     level: "info",
   },
@@ -54,6 +59,7 @@ export function updateConfig(partial: Partial<LucidConfig>): void {
     query: { ...currentConfig.query, ...partial.query },
     semantic: { ...currentConfig.semantic, ...partial.semantic },
     catalog: { ...currentConfig.catalog, ...partial.catalog },
+    embedding: { ...currentConfig.embedding, ...partial.embedding },
     logging: { ...currentConfig.logging, ...partial.logging },
   };
 }

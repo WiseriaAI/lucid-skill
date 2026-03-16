@@ -212,6 +212,39 @@ catalog:
 
 ---
 
+## Embedding Hybrid Search (Optional)
+
+Enable embedding-based hybrid search for better multilingual and semantic matching. When enabled, `search_tables` uses both BM25 keyword search and vector similarity, fused with Reciprocal Rank Fusion (RRF).
+
+**How to enable:**
+
+```bash
+# Via environment variable
+LUCID_EMBEDDING_ENABLED=true npx @wiseria/lucid-mcp
+```
+
+Or in Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "lucid": {
+      "command": "npx",
+      "args": ["@wiseria/lucid-mcp"],
+      "env": {
+        "LUCID_EMBEDDING_ENABLED": "true"
+      }
+    }
+  }
+}
+```
+
+**Notes:**
+- First launch downloads ~460MB multilingual model (`paraphrase-multilingual-MiniLM-L12-v2`) to `~/.lucid-mcp/models/`
+- Model loading is async — search works immediately via BM25, embedding kicks in once ready
+- Default: **disabled** — no impact on startup time or disk usage when off
+
+---
+
 ## Security
 
 - **Read-only**: Only `SELECT` statements are allowed. `INSERT`, `UPDATE`, `DELETE`, `DROP`, and all DDL are blocked.
@@ -238,7 +271,7 @@ npm test       # Run e2e tests
 - [x] Sprint 1: Excel / CSV / MySQL connectors, DuckDB query engine, SQL safety
 - [x] Sprint 2: Semantic layer (YAML), BM25 search index, natural language routing
 - [x] Sprint 3: Query routing (MySQL direct), npm publish
-- [ ] V1: Embedding-based hybrid search (BM25 + vector)
+- [x] V1: Embedding-based hybrid search (BM25 + vector)
 - [ ] V1: Parquet / large file support
 - [ ] Commercial: Multi-tenancy, authentication, hosted version
 

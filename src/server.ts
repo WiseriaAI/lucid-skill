@@ -13,6 +13,7 @@ import { handleSearchTables } from "./tools/search.js";
 import { handleGetOverview } from "./tools/overview.js";
 import { autoRestoreConnections } from "./startup.js";
 import { getConfig } from "./config.js";
+import { Embedder } from "./semantic/embedder.js";
 
 /**
  * Create and configure the Lucid MCP Server.
@@ -25,8 +26,18 @@ export async function createServer(): Promise<McpServer> {
   const router = new QueryRouter(engine);
   const semanticIndex = new SemanticIndex();
 
+  // Initialize embedder if enabled (non-blocking)
+  let embedder: Embedder | null = null;
+  if (config.embedding.enabled) {
+    embedder = Embedder.getInstance();
+    // Fire-and-forget: don't block server startup
+    embedder.init().catch(() => {
+      // Error already logged inside init()
+    });
+  }
+
   // Auto-restore previously connected sources on startup
-  const { restored, failed } = await autoRestoreConnections(catalog, engine, router, semanticIndex);
+  const { restored, failed } = await autoRestoreConnections(catalog, engine, router, semanticIndex, embedder);
   if (restored > 0 || failed.length > 0) {
     process.stderr.write(
       `[lucid-mcp] startup: restored ${restored} source(s)${failed.length ? `, failed: ${failed.join("; ")}` : ""}\n`,
@@ -254,7 +265,7 @@ export async function createServer(): Promise<McpServer> {
     },
     async (params) => {
       try {
-        const result = handleUpdateSemantic(params, catalog, semanticIndex);
+        const result = handleUpdateSemantic(params, catalog, semanticIndex, embedder);
         return { content: [{ type: "text" as const, text: result }] };
       } catch (error) {
         return {
@@ -275,7 +286,7 @@ export async function createServer(): Promise<McpServer> {
     },
     async (params) => {
       try {
-        const result = handleSearchTables(params, semanticIndex);
+        const result = await handleSearchTables(params, semanticIndex, catalog, embedder);
         return { content: [{ type: "text" as const, text: result }] };
       } catch (error) {
         return {

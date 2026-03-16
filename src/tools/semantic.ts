@@ -3,6 +3,7 @@
  */
 
 import type { TableSemantic, ColumnSemantic } from "../types.js";
+import type { Embedder } from "../semantic/embedder.js";
 import { CatalogStore } from "../catalog/store.js";
 import { QueryEngine } from "../query/engine.js";
 import { writeTableSemantic } from "../semantic/layer.js";
@@ -108,6 +109,7 @@ export function handleUpdateSemantic(
   params: Record<string, unknown>,
   catalog: CatalogStore,
   index: SemanticIndex,
+  embedder?: Embedder | null,
 ): string {
   const tables = params.tables as Array<Record<string, unknown>>;
 
@@ -191,8 +193,8 @@ export function handleUpdateSemantic(
     // Write YAML
     writeTableSemantic(sourceId, tableName, semantic);
 
-    // Update BM25 index
-    index.indexTable(sourceId, tableName, semantic);
+    // Update BM25 index (+ embedding if enabled)
+    index.indexTable(sourceId, tableName, semantic, catalog, embedder ?? undefined);
 
     // Update semantic status in catalog
     catalog.updateSemanticStatus(sourceId, tableName, "inferred");

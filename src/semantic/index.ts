@@ -4,8 +4,12 @@
  */
 
 import Database from "better-sqlite3";
+import crypto from "node:crypto";
 import type { TableSemantic } from "../types.js";
+import type { CatalogStore } from "../catalog/store.js";
 import { getConfig } from "../config.js";
+import { Embedder } from "./embedder.js";
+import { updateCacheEntry } from "./hybridSearch.js";
 
 export class SemanticIndex {
   private db: Database.Database;
@@ -60,8 +64,15 @@ export class SemanticIndex {
   /**
    * Index (or re-index) a single table's semantic.
    * Deletes existing entry first, then inserts new one.
+   * If embedding is enabled and embedder is ready, also generates and saves the embedding.
    */
-  indexTable(sourceId: string, tableName: string, semantic: TableSemantic): void {
+  indexTable(
+    sourceId: string,
+    tableName: string,
+    semantic: TableSemantic,
+    catalog?: CatalogStore,
+    embedder?: Embedder,
+  ): void {
     // Delete existing entry
     this.db
       .prepare("DELETE FROM semantic_index WHERE source_id = ? AND table_name = ?")
@@ -72,6 +83,23 @@ export class SemanticIndex {
     this.db
       .prepare("INSERT INTO semantic_index (source_id, table_name, searchable_text) VALUES (?, ?, ?)")
       .run(sourceId, tableName, searchableText);
+
+    // Embedding: fire-and-forget if enabled and ready
+    if (catalog && embedder?.isReady()) {
+      const contentHash = crypto.createHash("sha256").update(searchableText).digest("hex").slice(0, 16);
+      const existing = catalog.getEmbedding(sourceId, tableName);
+      if (!existing || existing.contentHash !== contentHash || existing.modelId !== embedder.getModelId()) {
+        embedder
+          .embed(searchableText)
+          .then((vector) => {
+            catalog.saveEmbedding(sourceId, tableName, vector, embedder.getModelId(), contentHash);
+            updateCacheEntry(sourceId, tableName, vector);
+          })
+          .catch(() => {
+            // Non-fatal: embedding generation failed
+          });
+      }
+    }
   }
 
   /**
@@ -144,6 +172,41 @@ export class SemanticIndex {
    */
   clear(): void {
     this.db.exec("DELETE FROM semantic_index");
+  }
+
+  /**
+   * Ensure all indexed tables have embeddings.
+   * Re-generates embeddings for tables where content_hash or model_id has changed.
+   */
+  async ensureEmbeddings(catalog: CatalogStore, embedder: Embedder): Promise<number> {
+    if (!embedder.isReady()) return 0;
+
+    // Get all indexed entries
+    const rows = this.db
+      .prepare("SELECT source_id, table_name, searchable_text FROM semantic_index")
+      .all() as Array<{ source_id: string; table_name: string; searchable_text: string }>;
+
+    let count = 0;
+    for (const row of rows) {
+      const contentHash = crypto.createHash("sha256").update(row.searchable_text).digest("hex").slice(0, 16);
+      const existing = catalog.getEmbedding(row.source_id, row.table_name);
+
+      if (!existing || existing.contentHash !== contentHash || existing.modelId !== embedder.getModelId()) {
+        try {
+          const vector = await embedder.embed(row.searchable_text);
+          catalog.saveEmbedding(row.source_id, row.table_name, vector, embedder.getModelId(), contentHash);
+          updateCacheEntry(row.source_id, row.table_name, vector);
+          count++;
+        } catch {
+          // Non-fatal
+        }
+      }
+    }
+
+    if (count > 0) {
+      process.stderr.write(`[lucid-mcp] embedder: generated ${count} embedding(s)\n`);
+    }
+    return count;
   }
 
   /**

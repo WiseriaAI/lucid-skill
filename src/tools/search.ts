@@ -2,16 +2,23 @@
  * search_tables tool handler.
  */
 
+import type { CatalogStore } from "../catalog/store.js";
+import type { Embedder } from "../semantic/embedder.js";
 import { SemanticIndex } from "../semantic/index.js";
 import { searchTables, type SearchResult } from "../semantic/search.js";
+import { hybridSearch } from "../semantic/hybridSearch.js";
+import { readTableSemantic } from "../semantic/layer.js";
 
 /**
  * search_tables — returns matching tables with full semantic info.
+ * Uses hybrid search (BM25 + embedding) when embedder is available.
  */
-export function handleSearchTables(
+export async function handleSearchTables(
   params: Record<string, unknown>,
   index: SemanticIndex,
-): string {
+  catalog?: CatalogStore,
+  embedder?: Embedder | null,
+): Promise<string> {
   const query = params.query as string;
   const topK = Number(params.top_k ?? params.topK ?? 5);
 
@@ -19,7 +26,21 @@ export function handleSearchTables(
     throw new Error("query is required");
   }
 
-  const results = searchTables(index, query, topK);
+  let results: SearchResult[];
+
+  if (embedder && catalog) {
+    // Hybrid search: BM25 + embedding with RRF fusion
+    const hybridResults = await hybridSearch(query, catalog, index, embedder, topK);
+    results = hybridResults.map((r) => ({
+      sourceId: r.sourceId,
+      tableName: r.tableName,
+      rank: -r.score, // Negative so higher score = lower (better) rank for display
+      semantic: readTableSemantic(r.sourceId, r.tableName),
+    }));
+  } else {
+    // BM25-only fallback
+    results = searchTables(index, query, topK);
+  }
 
   if (results.length === 0) {
     return JSON.stringify({
