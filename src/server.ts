@@ -11,7 +11,7 @@ import { handleProfileData } from "./tools/profile.js";
 import { handleInitSemantic, handleUpdateSemantic } from "./tools/semantic.js";
 import { handleSearchTables } from "./tools/search.js";
 import { handleGetOverview } from "./tools/overview.js";
-import { handleGetJoinPaths } from "./tools/discovery.js";
+import { handleGetJoinPaths, handleGetBusinessDomains } from "./tools/discovery.js";
 import { autoRestoreConnections } from "./startup.js";
 import { getConfig } from "./config.js";
 import { Embedder } from "./semantic/embedder.js";
@@ -316,6 +316,26 @@ export async function createServer(): Promise<McpServer> {
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: `Error discovering JOIN paths: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ── Tool: get_business_domains ───────────────────────────────────────────
+  server.tool(
+    "get_business_domains",
+    "Discover business domains by clustering tables based on schema similarity. Returns domain groups with table assignments and keywords.",
+    {
+      datasource: z.string().optional().describe("Filter by data source ID (optional, returns all if omitted)"),
+    },
+    async (params) => {
+      try {
+        const result = await handleGetBusinessDomains(params, catalog, embedder);
+        return { content: [{ type: "text" as const, text: result }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Error discovering business domains: ${error instanceof Error ? error.message : String(error)}` }],
           isError: true,
         };
       }

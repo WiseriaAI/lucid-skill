@@ -478,6 +478,90 @@ describe("Lucid MCP — Sprint 1 E2E Tests", () => {
     });
   });
 
+  describe("Scenario 2c: Business Domain Clustering", () => {
+    it("2c.0 连接 HR CSV 数据源", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "connect_source",
+          arguments: {
+            type: "csv",
+            path: path.join(process.cwd(), "tests/datasets/hr"),
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.tables.length).toBe(2);
+      console.log("✅ HR CSV 连接成功:", data.tables.map((t: { name: string }) => t.name));
+    });
+
+    it("2c.1 get_business_domains 返回 2+ 个域（ecommerce + HR）", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_business_domains",
+          arguments: {},
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.domains.length).toBeGreaterThanOrEqual(2);
+      expect(data.total_tables).toBeGreaterThanOrEqual(6);
+      // Each domain should have at least 1 table
+      for (const domain of data.domains) {
+        expect(domain.tables.length).toBeGreaterThan(0);
+        expect(domain.keywords.length).toBeGreaterThan(0);
+        expect(domain.name).toBeTruthy();
+      }
+      console.log("✅ get_business_domains:", data.domains.length, "domains found");
+      for (const d of data.domains) {
+        console.log(`  Domain "${d.name}": ${d.tables.join(", ")}`);
+      }
+    });
+
+    it("2c.2 get_business_domains 按数据源过滤", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_business_domains",
+          arguments: {
+            datasource: "csv:ecommerce",
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.domains.length).toBeGreaterThanOrEqual(1);
+      // All tables in domains should be from ecommerce
+      const ecommerceTables = new Set(["orders", "order_items", "customers", "products"]);
+      for (const domain of data.domains) {
+        for (const table of domain.tables) {
+          expect(ecommerceTables.has(table)).toBe(true);
+        }
+      }
+      console.log("✅ get_business_domains (filtered):", data.domains.length, "domains for ecommerce");
+    });
+  });
+
   describe("Scenario 3: SQL 安全检查", () => {
     it("3.1 禁止 INSERT", async () => {
       const response = await sendMessage({

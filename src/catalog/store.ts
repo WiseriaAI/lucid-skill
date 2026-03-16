@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import type { SemanticStatus, JoinPath, CacheMeta } from "../types.js";
+import type { SemanticStatus, JoinPath, CacheMeta, BusinessDomain } from "../types.js";
 import { getConfig } from "../config.js";
 
 /**
@@ -76,6 +76,15 @@ export class CatalogStore {
         schema_hash    TEXT NOT NULL,
         last_computed  INTEGER NOT NULL,
         dirty          INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS business_domains (
+        domain_id    TEXT PRIMARY KEY,
+        domain_name  TEXT NOT NULL,
+        table_names  TEXT NOT NULL,
+        keywords     TEXT NOT NULL,
+        created_at   INTEGER NOT NULL,
+        version      INTEGER NOT NULL DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS embeddings (
@@ -453,6 +462,41 @@ export class CatalogStore {
          ON CONFLICT(datasource_id) DO UPDATE SET dirty=1`,
       )
       .run(datasourceId);
+  }
+
+  // ── Business Domain Methods ──
+
+  saveDomain(domain: BusinessDomain): void {
+    this.db
+      .prepare(
+        `INSERT INTO business_domains (domain_id, domain_name, table_names, keywords, created_at, version)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(domain_id) DO UPDATE SET
+           domain_name=?, table_names=?, keywords=?, created_at=?, version=?`,
+      )
+      .run(
+        domain.domainId, domain.domainName,
+        JSON.stringify(domain.tableNames), JSON.stringify(domain.keywords),
+        domain.createdAt, domain.version,
+        domain.domainName, JSON.stringify(domain.tableNames),
+        JSON.stringify(domain.keywords), domain.createdAt, domain.version,
+      );
+  }
+
+  getDomains(): BusinessDomain[] {
+    const rows = this.db.prepare("SELECT * FROM business_domains").all() as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      domainId: r.domain_id as string,
+      domainName: r.domain_name as string,
+      tableNames: JSON.parse(r.table_names as string) as string[],
+      keywords: JSON.parse(r.keywords as string) as string[],
+      createdAt: r.created_at as number,
+      version: r.version as number,
+    }));
+  }
+
+  clearDomains(): void {
+    this.db.prepare("DELETE FROM business_domains").run();
   }
 
   close(): void {

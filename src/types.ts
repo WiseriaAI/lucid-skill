@@ -133,6 +133,17 @@ export interface CacheMeta {
   dirty: number;
 }
 
+// ── Business Domain Types ──
+
+export interface BusinessDomain {
+  domainId: string;
+  domainName: string;
+  tableNames: string[];
+  keywords: string[];
+  createdAt: number;
+  version: number;
+}
+
 // ── Query Types ──
 
 export type QueryFormat = "json" | "markdown" | "csv";

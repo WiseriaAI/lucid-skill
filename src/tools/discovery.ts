@@ -6,6 +6,7 @@
 import type { CatalogStore } from "../catalog/store.js";
 import type { Embedder } from "../semantic/embedder.js";
 import { discoverJoinPaths, computeSchemaHash } from "../discovery/joins.js";
+import { discoverBusinessDomains } from "../discovery/domains.js";
 
 /**
  * Handle get_join_paths request.
@@ -89,5 +90,91 @@ export async function handleGetJoinPaths(
       join_condition: p.joinCondition,
     })),
     warning,
+  }, null, 2);
+}
+
+/**
+ * Handle get_business_domains request.
+ * Checks cache, re-discovers if dirty, returns clustered domains.
+ */
+export async function handleGetBusinessDomains(
+  params: Record<string, unknown>,
+  catalog: CatalogStore,
+  embedder?: Embedder | null,
+): Promise<string> {
+  const datasource = params.datasource as string | undefined;
+
+  // Determine which sources need refresh
+  const sources = datasource
+    ? catalog.getSources().filter((s) => s.id === datasource)
+    : catalog.getSources();
+
+  if (sources.length === 0 && datasource) {
+    throw new Error(`Data source "${datasource}" not found`);
+  }
+
+  // Check if any source is dirty or has changed schema
+  let needsRefresh = false;
+  for (const source of sources) {
+    const meta = catalog.getCacheMeta(source.id);
+    const currentHash = computeSchemaHash(catalog, source.id);
+    if (!meta || meta.dirty === 1 || meta.schemaHash !== currentHash) {
+      needsRefresh = true;
+      break;
+    }
+  }
+
+  // Also refresh if no domains exist yet
+  if (!needsRefresh && catalog.getDomains().length === 0) {
+    needsRefresh = true;
+  }
+
+  if (needsRefresh) {
+    catalog.clearDomains();
+    const domains = await discoverBusinessDomains(catalog, embedder);
+    for (const d of domains) {
+      catalog.saveDomain(d);
+    }
+    // Update cache for all sources
+    for (const source of sources) {
+      const hash = computeSchemaHash(catalog, source.id);
+      catalog.setCacheMeta(source.id, hash);
+    }
+  }
+
+  const domains = catalog.getDomains();
+
+  // Filter by datasource if specified
+  let filteredDomains = domains;
+  if (datasource) {
+    const sourceTables = new Set(
+      catalog.getTables(datasource).map((t) => t.table_name),
+    );
+    filteredDomains = domains
+      .map((d) => ({
+        ...d,
+        tableNames: d.tableNames.filter((t) => sourceTables.has(t)),
+      }))
+      .filter((d) => d.tableNames.length > 0);
+  }
+
+  // Compute unclustered tables
+  const allTables = datasource
+    ? catalog.getTables(datasource)
+    : catalog.getTables();
+  const clusteredTables = new Set(filteredDomains.flatMap((d) => d.tableNames));
+  const unclustered = allTables
+    .map((t) => t.table_name)
+    .filter((t) => !clusteredTables.has(t));
+
+  return JSON.stringify({
+    domains: filteredDomains.map((d) => ({
+      name: d.domainName,
+      tables: d.tableNames,
+      keywords: d.keywords,
+      table_count: d.tableNames.length,
+    })),
+    total_tables: allTables.length,
+    unclustered,
   }, null, 2);
 }
