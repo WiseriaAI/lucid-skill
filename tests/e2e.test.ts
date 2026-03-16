@@ -376,6 +376,108 @@ describe("Lucid MCP — Sprint 1 E2E Tests", () => {
     });
   });
 
+  describe("Scenario 2b: JOIN Path Discovery (ecommerce)", () => {
+    it("2b.1 连接 ecommerce CSV 数据源", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "connect_source",
+          arguments: {
+            type: "csv",
+            path: path.join(process.cwd(), "tests/datasets/ecommerce"),
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.tables.length).toBe(4);
+      console.log("✅ ecommerce CSV 连接成功:", data.tables.map((t: { name: string }) => t.name));
+    });
+
+    it("2b.2 get_join_paths: orders ↔ customers", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_join_paths",
+          arguments: {
+            table_a: "orders",
+            table_b: "customers",
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      expect(data.direct_paths.length).toBeGreaterThan(0);
+      // Should find orders.customer_id = customers.customer_id
+      const hasCustomerId = data.direct_paths.some((p: { join_condition: string }) =>
+        p.join_condition.includes("customer_id")
+      );
+      expect(hasCustomerId).toBe(true);
+      console.log("✅ JOIN paths (orders ↔ customers):", data.direct_paths.length, "direct,", data.indirect_paths.length, "indirect");
+      console.log("  Best path:", data.direct_paths[0]?.join_condition);
+    });
+
+    it("2b.3 get_join_paths: orders ↔ products (indirect via order_items)", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_join_paths",
+          arguments: {
+            table_a: "orders",
+            table_b: "products",
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      expect(response.error).toBeUndefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      const data = JSON.parse(result.content![0].text);
+      // Should find indirect path via order_items
+      const totalPaths = data.direct_paths.length + data.indirect_paths.length;
+      expect(totalPaths).toBeGreaterThan(0);
+      console.log("✅ JOIN paths (orders ↔ products):", data.direct_paths.length, "direct,", data.indirect_paths.length, "indirect");
+      if (data.indirect_paths.length > 0) {
+        console.log("  Indirect via:", data.indirect_paths[0]?.via);
+      }
+    });
+
+    it("2b.4 get_join_paths: 不存在的表报错", async () => {
+      const response = await sendMessage({
+        jsonrpc: "2.0",
+        id: messageId++,
+        method: "tools/call",
+        params: {
+          name: "get_join_paths",
+          arguments: {
+            table_a: "nonexistent_table",
+            table_b: "customers",
+          },
+        },
+      });
+
+      expect(response.result).toBeDefined();
+      const result = response.result as { content?: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBe(true);
+      console.log("✅ 不存在的表报错:", result.content?.[0]?.text);
+    });
+  });
+
   describe("Scenario 3: SQL 安全检查", () => {
     it("3.1 禁止 INSERT", async () => {
       const response = await sendMessage({

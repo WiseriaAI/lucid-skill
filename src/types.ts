@@ -111,6 +111,28 @@ export interface TableSemantic {
   metrics?: MetricDefinition[];
 }
 
+// ── JOIN Discovery Types ──
+
+export interface JoinPath {
+  pathId: string;
+  sourceId: string;
+  tableA: string;
+  tableB: string;
+  joinType: string;
+  joinCondition: string;
+  confidence: number;
+  signalSource: string;
+  sqlTemplate: string;
+  version: number;
+}
+
+export interface CacheMeta {
+  datasourceId: string;
+  schemaHash: string;
+  lastComputed: number;
+  dirty: number;
+}
+
 // ── Query Types ──
 
 export type QueryFormat = "json" | "markdown" | "csv";

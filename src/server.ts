@@ -11,6 +11,7 @@ import { handleProfileData } from "./tools/profile.js";
 import { handleInitSemantic, handleUpdateSemantic } from "./tools/semantic.js";
 import { handleSearchTables } from "./tools/search.js";
 import { handleGetOverview } from "./tools/overview.js";
+import { handleGetJoinPaths } from "./tools/discovery.js";
 import { autoRestoreConnections } from "./startup.js";
 import { getConfig } from "./config.js";
 import { Embedder } from "./semantic/embedder.js";
@@ -85,6 +86,9 @@ export async function createServer(): Promise<McpServer> {
     async (params) => {
       try {
         const result = await handleConnectSource(params, catalog, engine, router);
+
+        // Mark JOIN cache dirty so paths are re-discovered on next request
+        catalog.markDirty(result.sourceId);
 
         // Determine nextStep hint based on semantic_status of tables
         const tableMetas = catalog.getTables(result.sourceId);
@@ -291,6 +295,27 @@ export async function createServer(): Promise<McpServer> {
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: `Error searching tables: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ── Tool: get_join_paths ─────────────────────────────────────────────────
+  server.tool(
+    "get_join_paths",
+    "Discover JOIN paths between two tables. Returns direct paths (FK, column name matching, embedding similarity) and indirect paths (1-hop via intermediate tables) with confidence scores.",
+    {
+      table_a: z.string().describe("First table name"),
+      table_b: z.string().describe("Second table name"),
+    },
+    async (params) => {
+      try {
+        const result = await handleGetJoinPaths(params, catalog, embedder);
+        return { content: [{ type: "text" as const, text: result }] };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: `Error discovering JOIN paths: ${error instanceof Error ? error.message : String(error)}` }],
           isError: true,
         };
       }

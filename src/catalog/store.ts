@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import type { SemanticStatus } from "../types.js";
+import type { SemanticStatus, JoinPath, CacheMeta } from "../types.js";
 import { getConfig } from "../config.js";
 
 /**
@@ -56,6 +56,26 @@ export class CatalogStore {
         sample_values TEXT,
         profiled_at   TEXT,
         PRIMARY KEY (source_id, table_name, column_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS join_paths (
+        path_id        TEXT PRIMARY KEY,
+        source_id      TEXT NOT NULL,
+        table_a        TEXT NOT NULL,
+        table_b        TEXT NOT NULL,
+        join_type      TEXT NOT NULL DEFAULT 'INNER',
+        join_condition TEXT NOT NULL,
+        confidence     REAL NOT NULL,
+        signal_source  TEXT NOT NULL,
+        sql_template   TEXT NOT NULL,
+        version        INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS domain_cache_meta (
+        datasource_id  TEXT PRIMARY KEY,
+        schema_hash    TEXT NOT NULL,
+        last_computed  INTEGER NOT NULL,
+        dirty          INTEGER NOT NULL DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS embeddings (
@@ -337,6 +357,102 @@ export class CatalogStore {
       modelId: r.model_id,
       contentHash: r.content_hash,
     }));
+  }
+
+  // ── JOIN Path Methods ──
+
+  saveJoinPath(p: JoinPath): void {
+    this.db
+      .prepare(
+        `INSERT INTO join_paths (path_id, source_id, table_a, table_b, join_type, join_condition, confidence, signal_source, sql_template, version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(path_id) DO UPDATE SET
+           join_type=?, join_condition=?, confidence=?, signal_source=?, sql_template=?, version=?`,
+      )
+      .run(
+        p.pathId, p.sourceId, p.tableA, p.tableB, p.joinType, p.joinCondition,
+        p.confidence, p.signalSource, p.sqlTemplate, p.version,
+        p.joinType, p.joinCondition, p.confidence, p.signalSource, p.sqlTemplate, p.version,
+      );
+  }
+
+  getJoinPaths(tableA: string, tableB: string): JoinPath[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM join_paths
+         WHERE (table_a = ? AND table_b = ?) OR (table_a = ? AND table_b = ?)`,
+      )
+      .all(tableA, tableB, tableB, tableA) as Array<Record<string, unknown>>;
+
+    return rows.map((r) => ({
+      pathId: r.path_id as string,
+      sourceId: r.source_id as string,
+      tableA: r.table_a as string,
+      tableB: r.table_b as string,
+      joinType: r.join_type as string,
+      joinCondition: r.join_condition as string,
+      confidence: r.confidence as number,
+      signalSource: r.signal_source as string,
+      sqlTemplate: r.sql_template as string,
+      version: r.version as number,
+    }));
+  }
+
+  getAllJoinPaths(): JoinPath[] {
+    const rows = this.db.prepare("SELECT * FROM join_paths").all() as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      pathId: r.path_id as string,
+      sourceId: r.source_id as string,
+      tableA: r.table_a as string,
+      tableB: r.table_b as string,
+      joinType: r.join_type as string,
+      joinCondition: r.join_condition as string,
+      confidence: r.confidence as number,
+      signalSource: r.signal_source as string,
+      sqlTemplate: r.sql_template as string,
+      version: r.version as number,
+    }));
+  }
+
+  clearJoinPaths(sourceId: string): void {
+    this.db.prepare("DELETE FROM join_paths WHERE source_id = ?").run(sourceId);
+  }
+
+  // ── Cache Meta Methods ──
+
+  getCacheMeta(datasourceId: string): CacheMeta | null {
+    const row = this.db
+      .prepare("SELECT * FROM domain_cache_meta WHERE datasource_id = ?")
+      .get(datasourceId) as Record<string, unknown> | undefined;
+
+    if (!row) return null;
+    return {
+      datasourceId: row.datasource_id as string,
+      schemaHash: row.schema_hash as string,
+      lastComputed: row.last_computed as number,
+      dirty: row.dirty as number,
+    };
+  }
+
+  setCacheMeta(datasourceId: string, schemaHash: string): void {
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO domain_cache_meta (datasource_id, schema_hash, last_computed, dirty)
+         VALUES (?, ?, ?, 0)
+         ON CONFLICT(datasource_id) DO UPDATE SET schema_hash=?, last_computed=?, dirty=0`,
+      )
+      .run(datasourceId, schemaHash, now, schemaHash, now);
+  }
+
+  markDirty(datasourceId: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO domain_cache_meta (datasource_id, schema_hash, last_computed, dirty)
+         VALUES (?, '', 0, 1)
+         ON CONFLICT(datasource_id) DO UPDATE SET dirty=1`,
+      )
+      .run(datasourceId);
   }
 
   close(): void {
