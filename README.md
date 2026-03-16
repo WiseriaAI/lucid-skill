@@ -80,9 +80,47 @@ Claude:
 
 ## Quick Start
 
-### 1. Add to Claude Desktop
+### Prerequisites
 
-**Claude Desktop** — Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+- **Node.js 18+** (recommended 20+) — check with `node -v`
+- **npm** (comes with Node.js)
+
+### Installation
+
+**Option 1: Zero-install (recommended)** — no global install needed, always runs the latest version:
+
+```bash
+npx @wiseria/lucid-mcp
+```
+
+Just use `npx @wiseria/lucid-mcp` in your MCP config (see below).
+
+**Option 2: Global install** — faster startup, no download on each launch:
+
+```bash
+npm install -g @wiseria/lucid-mcp
+```
+
+Then use `lucid-mcp` as the command in your MCP config.
+
+**Option 3: Local install** — pin to a specific version in a project:
+
+```bash
+npm install @wiseria/lucid-mcp
+```
+
+Use the full path `./node_modules/.bin/lucid-mcp` in your MCP config.
+
+### 1. Configure your platform
+
+Choose your platform and add the config:
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Config file location:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -94,8 +132,14 @@ Claude:
   }
 }
 ```
+</details>
 
-**Cursor** — Edit `.cursor/mcp.json` in your project (or global `~/.cursor/mcp.json`):
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Config file location:
+- **Project-level**: `.cursor/mcp.json` (in your project root)
+- **Global**: `~/.cursor/mcp.json`
 
 ```json
 {
@@ -107,25 +151,94 @@ Claude:
   }
 }
 ```
+</details>
 
-**OpenClaw** — Add to your OpenClaw config:
+<details>
+<summary><strong>OpenClaw</strong></summary>
+
+Config file: `~/.openclaw/openclaw.json`
 
 ```json
 {
-  "plugins": {
-    "mcp": {
-      "servers": {
-        "lucid": {
+  "mcpServers": {
+    "lucid": {
+      "command": "npx",
+      "args": ["@wiseria/lucid-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Config file: `~/.windsurf/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "lucid": {
+      "command": "npx",
+      "args": ["@wiseria/lucid-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Continue.dev</strong></summary>
+
+Config file: `~/.continue/config.json`, add under `experimental.modelContextProtocolServers`:
+
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
           "command": "npx",
           "args": ["@wiseria/lucid-mcp"]
         }
       }
-    }
+    ]
   }
 }
 ```
+</details>
 
 Restart the host application after editing config.
+
+### Verify Installation
+
+```bash
+npx @wiseria/lucid-mcp --version
+```
+
+Or launch the server and connect a CSV to verify everything works:
+
+> "Connect my CSV file at /path/to/data.csv"
+
+### Data Directory
+
+Lucid MCP stores data in `~/.lucid-mcp/`:
+
+| Path | Purpose |
+|------|---------|
+| `lucid-catalog.db` | SQLite metadata catalog (schema, profiling, search index) |
+| `semantic_store/` | Semantic YAML definitions (human-readable, Git-friendly) |
+| `models/` | Downloaded embedding model (only if embedding enabled) |
+
+Customize the data directory via the `LUCID_DATA_DIR` environment variable.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LUCID_DATA_DIR` | `~/.lucid-mcp` | Data directory for catalog, semantic store, models |
+| `LUCID_EMBEDDING_ENABLED` | `false` | Enable embedding hybrid search (downloads ~460MB model on first run) |
 
 ### 2. Connect a data source
 
