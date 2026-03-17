@@ -1,6 +1,6 @@
 {
   "name": "@wiseria/lucid-skill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-native data analysis skill. Connect Excel/CSV/MySQL/PostgreSQL, understand business semantics, query with natural language.",
   "type": "module",
   "bin": {
