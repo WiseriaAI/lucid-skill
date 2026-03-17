@@ -1,20 +1,20 @@
 # lucid-skill
 
-**AI-native data analysis skill — works as CLI tool or MCP Server.**
+**AI-native data analysis skill.** Connect Excel/CSV/MySQL/PostgreSQL, understand business semantics, query with natural language.
 
-Connect your Excel files, CSVs, MySQL, and PostgreSQL databases. Understand business semantics. Query with natural language.
-
-No API key required. No LLM inside the server. Just plug in and ask questions.
+No API key required. No LLM inside — you (the agent) are the brain.
 
 ---
 
-## Installation & Setup (for AI Agents)
+## Installation (for AI Agents)
 
-> **If you are an AI agent** reading this README, follow the steps below to install and configure lucid-skill for the user. Do not ask the user to run commands — do it yourself.
+> **If you are an AI agent**, follow these steps to install lucid-skill. Do not ask the user to run commands — do it yourself.
 
 ### Step 1: Verify Node.js
 
-Run `node -v` to confirm Node.js 18+ is installed. If not, inform the user they need Node.js 18+ before proceeding.
+```bash
+node -v   # Requires 18+
+```
 
 ### Step 2: Install
 
@@ -22,108 +22,39 @@ Run `node -v` to confirm Node.js 18+ is installed. If not, inform the user they 
 npm install -g @wiseria/lucid-skill
 ```
 
-This installs the `lucid-skill` command globally. **This step is required** — the tool must be installed before it can be used by the host application.
+### Step 3: Verify
 
-### Step 3: Add to MCP config
-
-Detect which platform the user is on and write the config:
-
-**Claude Desktop**
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-**Cursor**
-- Project: `.cursor/mcp.json`
-- Global: `~/.cursor/mcp.json`
-
-**OpenClaw**
-- `~/.openclaw/openclaw.json` → `mcpServers` section
-
-**Windsurf**
-- `~/.windsurf/mcp.json`
-
-**Continue.dev**
-- `~/.continue/config.json` → `experimental.modelContextProtocolServers`
-
-Config content (same for all except Continue.dev):
-
-```json
-{
-  "mcpServers": {
-    "lucid": {
-      "command": "lucid-skill"
-    }
-  }
-}
+```bash
+lucid-skill --version
+lucid-skill overview     # Should return JSON (empty sources on first run is normal)
 ```
 
-For Continue.dev:
-```json
-{
-  "experimental": {
-    "modelContextProtocolServers": [
-      {
-        "transport": {
-          "type": "stdio",
-          "command": "lucid-skill"
-        }
-      }
-    ]
-  }
-}
-```
-
-To enable embedding hybrid search (optional, downloads ~460MB model on first run):
-```json
-{
-  "mcpServers": {
-    "lucid": {
-      "command": "lucid-skill",
-      "env": { "LUCID_EMBEDDING_ENABLED": "true" }
-    }
-  }
-}
-```
-
-### Step 4: Restart the host application
-
-After writing the config, tell the user to restart Claude Desktop / Cursor / etc. for the MCP server to load.
-
-### Step 5: Verify
-
-Once restarted, call `get_overview()` to confirm the server is running. An empty overview (no sources) is normal for first launch.
+Done. Start using the CLI commands below.
 
 ---
 
-## Data Directory
+## CLI Commands
 
-All data is stored in `~/.lucid-mcp/` (directory name kept for backward compatibility):
+All output is JSON (except `query` which defaults to markdown).
 
-| Path | Purpose |
-|------|---------|
-| `lucid-catalog.db` | SQLite metadata catalog (schema, profiling, search index) |
-| `semantic_store/` | Semantic YAML definitions (human-readable, Git-friendly) |
-| `models/` | Downloaded embedding model (only if embedding enabled) |
-
-Override with `LUCID_DATA_DIR` environment variable.
-
----
-
-## Tools (11)
-
-| Tool | What it does |
-|------|-------------|
-| `get_overview` | **Start here.** Shows all connected sources, tables, row counts, semantic status. |
-| `connect_source` | Connect Excel / CSV / MySQL / PostgreSQL. Auto-collects schema + profiling. |
-| `list_tables` | List all connected tables with row counts and semantic status. |
-| `describe_table` | View column types, sample data, and business semantics. |
-| `profile_data` | Deep stats: null rate, distinct count, min/max, quartiles. |
-| `init_semantic` | Export schema + samples for LLM to infer business meaning. |
-| `update_semantic` | Save semantic definitions (YAML) + update search index. |
-| `search_tables` | Natural language search → relevant tables + JOIN hints + metrics. |
-| `get_join_paths` | Discover JOIN paths between two tables (direct + indirect via 1 hop). |
-| `get_business_domains` | Auto-discovered business domains via hierarchical clustering. |
-| `query` | Execute read-only SQL (SELECT only). Returns markdown/JSON/CSV. |
+```bash
+lucid-skill overview                           # Show all connected sources + tables + status
+lucid-skill connect csv /path/to/data.csv      # Connect a CSV file
+lucid-skill connect excel /path/to/report.xlsx # Connect an Excel file
+lucid-skill connect mysql --host h --database db --username u --password p
+lucid-skill connect postgres --host h --database db --username u --password p
+lucid-skill tables                             # List all tables
+lucid-skill describe <table>                   # Column details + sample data
+lucid-skill profile <table>                    # Deep stats: null rate, distinct, min/max
+lucid-skill init-semantic                      # Export schemas for semantic inference
+lucid-skill update-semantic <file|->           # Save semantic definitions (JSON)
+lucid-skill search "销售额 客户"                # Natural language → relevant tables
+lucid-skill join-paths <table_a> <table_b>     # Discover JOIN paths between tables
+lucid-skill domains                            # Auto-discovered business domains
+lucid-skill query "SELECT ..."                 # Execute SQL (SELECT only)
+lucid-skill query "SELECT ..." --format json   # Output as JSON
+lucid-skill query "SELECT ..." --format csv    # Output as CSV
+```
 
 ---
 
@@ -131,46 +62,35 @@ Override with `LUCID_DATA_DIR` environment variable.
 
 ### First time with a data source
 
-```
-1. get_overview()                          → check current state
-2. connect_source(type, path/host/...)     → connect data
-3. init_semantic()                         → get schema for inference
-4. update_semantic(tables=[...])           → save business meanings
-5. search_tables("用户的问题")              → find relevant tables
-6. get_join_paths(table_a, table_b)        → discover how to JOIN
-7. query(sql="SELECT ...")                 → execute and return results
+```bash
+lucid-skill overview                                    # 1. Check current state
+lucid-skill connect csv /path/to/data.csv               # 2. Connect data
+lucid-skill init-semantic                               # 3. Get schema for inference
+# Analyze output, infer business meanings, then:
+echo '{"tables":[...]}' | lucid-skill update-semantic - # 4. Save semantics
+lucid-skill search "用户的问题"                          # 5. Find relevant tables
+lucid-skill join-paths orders customers                 # 6. Discover JOINs
+lucid-skill query "SELECT ..."                          # 7. Execute and return
 ```
 
-### Returning (server auto-restores previous connections)
+### Returning (auto-restores previous connections)
 
-```
-1. get_overview()                          → see what's already connected
-2. search_tables("用户的问题")              → find relevant tables
-3. query(sql="SELECT ...")                 → execute
+```bash
+lucid-skill overview                     # See what's already connected
+lucid-skill search "用户的问题"           # Find relevant tables
+lucid-skill query "SELECT ..."           # Execute
 ```
 
 ---
 
-## How it works
+## Smart Query Pattern
 
-```
-You: "上个月哪个客户下单金额最多？"
+When a user asks a data question:
 
-Agent:
-  1. search_tables("上月 销售 客户")
-     → orders 表 (有 Sales 字段、Customer Name、Order Date)
-     → suggestedJoins, suggestedMetricSqls
-
-  2. get_join_paths("orders", "customers")
-     → JOIN orders ON orders.customer_id = customers.id
-
-  3. query(sql)
-     → 返回结果表格
-
-  4. 解读结果给用户
-```
-
-**Design principle: Server has no LLM.** All semantic inference and SQL generation is done by the host agent. The server handles deterministic operations only — connecting, cataloging, indexing, querying.
+1. `lucid-skill search "关键词"` — find relevant tables, check `suggestedJoins` and `suggestedMetricSqls`
+2. If multi-table: `lucid-skill join-paths table_a table_b` — get correct JOIN SQL
+3. Compose SQL from the returned context
+4. `lucid-skill query "SELECT ..."` — execute and present results
 
 ---
 
@@ -181,69 +101,56 @@ Agent:
 | Excel | `.xlsx`, `.xls` | Multiple sheets supported |
 | CSV | `.csv` | Auto-detects encoding and delimiter |
 | MySQL | MySQL 5.7+ / 8.0+ | Reads foreign keys and column comments |
-| PostgreSQL | PostgreSQL 12+ | Reads foreign keys and column comments via `pg_description` |
+| PostgreSQL | PostgreSQL 12+ | Reads foreign keys and column comments |
 
 ---
 
-## Semantic Layer
+## Key Facts
 
-Lucid stores business semantics as YAML files in `~/.lucid-mcp/semantic_store/`. These are:
+- **Read-only**: Only SELECT allowed. INSERT/UPDATE/DELETE/DROP blocked.
+- **Auto-restore**: Previous connections survive restarts. Always check `overview` first.
+- **Semantic layer**: YAML files in `~/.lucid-mcp/semantic_store/`, human-readable, Git-friendly.
+- **Data directory**: `~/.lucid-mcp/` (override with `LUCID_DATA_DIR` env var).
+- **Embedding**: Optional. Set `LUCID_EMBEDDING_ENABLED=true` for better multilingual search (downloads ~460MB model on first use).
+- **No credentials stored**: Database passwords are never written to disk.
+- **Local only**: All data stays on your machine.
 
-- **Human-readable** — edit them directly if needed
-- **Git-friendly** — commit and version your semantic definitions
-- **LLM-agnostic** — switching from Claude to GPT doesn't lose your semantic layer
+---
 
-Example:
-```yaml
-source: "csv:orders.csv"
-table: orders
-description: "订单记录，包含销售额、折扣、利润等关键商业指标"
-businessDomain: "电商/交易"
-tags: ["核心表", "财务", "订单"]
+## Semantic Update Format
 
-columns:
-  - name: Sales
-    semantic: "订单销售额"
-    role: measure
-    unit: CNY
-    aggregation: sum
-
-  - name: Order Date
-    semantic: "下单时间"
-    role: timestamp
-    granularity: [day, month, year]
-
-metrics:
-  - name: "总销售额"
-    expression: "SUM(Sales)"
+```json
+{
+  "tables": [{
+    "table_name": "orders",
+    "description": "订单主表",
+    "business_domain": "电商/交易",
+    "tags": ["核心表", "财务"],
+    "columns": [
+      { "name": "amount", "semantic": "订单金额", "role": "measure", "unit": "CNY", "aggregation": "sum" },
+      { "name": "created_at", "semantic": "下单时间", "role": "timestamp" }
+    ],
+    "relations": [
+      { "target_table": "customers", "join_condition": "orders.customer_id = customers.id", "relation_type": "many_to_one" }
+    ],
+    "metrics": [
+      { "name": "日GMV", "expression": "SUM(amount)", "group_by": "DATE(created_at)" }
+    ]
+  }]
+}
 ```
 
 ---
 
-## JOIN Path Discovery
+## MCP Server Mode
 
-`get_join_paths` automatically discovers how two tables can be joined — using foreign keys, matching column names, and embedding similarity. It finds both direct joins and indirect paths via one intermediate table, ranked by confidence.
+lucid-skill also works as an MCP Server for platforms that support it (Claude Desktop, Cursor, etc.):
 
-## Business Domain Discovery
+```bash
+lucid-skill serve    # Start MCP Server (stdio JSON-RPC)
+```
 
-`get_business_domains` uses hierarchical clustering on table semantics and column overlap to group your tables into business domains (e.g., "Sales", "Inventory", "HR"). This gives the AI a high-level map of your data landscape before diving into specific queries.
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LUCID_DATA_DIR` | `~/.lucid-mcp` | Data directory for catalog, semantic store, models |
-| `LUCID_EMBEDDING_ENABLED` | `false` | Enable embedding hybrid search (downloads ~460MB model on first run) |
-
----
-
-## Security
-
-- **Read-only**: Only `SELECT` statements are allowed. `INSERT`, `UPDATE`, `DELETE`, `DROP`, and all DDL are blocked.
-- **No credentials stored**: Database passwords are never written to disk.
-- **Local only**: All data stays on your machine. Nothing is sent to external services.
+See [MCP configuration examples](https://github.com/WiseriaAI/lucid-skill/wiki/MCP-Setup) for platform-specific config.
 
 ---
 
@@ -254,21 +161,8 @@ git clone https://github.com/WiseriaAI/lucid-skill
 cd lucid-skill
 npm install
 npm run build
-npm run dev    # Run with tsx (no build step)
-npm test       # Run e2e tests
+npm test       # 27 e2e tests
 ```
-
----
-
-## Roadmap
-
-- [x] Sprint 1: Excel / CSV / MySQL connectors, DuckDB query engine, SQL safety
-- [x] Sprint 2: Semantic layer (YAML), BM25 search index, natural language routing
-- [x] Sprint 3: Query routing (MySQL direct), npm publish
-- [x] V1: Embedding-based hybrid search (BM25 + vector)
-- [x] V2: JOIN path discovery, business domain clustering, get_overview
-- [ ] V2: Parquet / large file support
-- [ ] Commercial: Multi-tenancy, authentication, hosted version
 
 ---
 
